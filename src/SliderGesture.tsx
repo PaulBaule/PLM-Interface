@@ -191,17 +191,18 @@ const SliderGesture: React.FC = () => {
         const releaseX = Math.max(15, Math.min(rawReleaseX, containerWidth - 15));
 
         if (info.offset.x > 0) { // Dragged right
-            const finalX = releaseX - 30;
+            const finalX = releaseX + 10;
             animate(x, finalX, anim_options);
         } else { // Dragged left
-            x.set(releaseX);
+            const finalX = releaseX - 10;
+            animate(x, finalX, anim_options);
         }
         
         // --- MQTT Logic ---
         const dx = info.offset.x;
         const dy = info.offset.y;
         
-        const minDragDistance = 50;
+        const minDragDistance = 0;
         let direction = "tap";
         if (Math.abs(dx) > minDragDistance || Math.abs(dy) > minDragDistance) {
             if (Math.abs(dx) > Math.abs(dy)) {
