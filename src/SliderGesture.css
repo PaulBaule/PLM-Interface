@@ -5,7 +5,7 @@
     height: 100px;
     display: flex;
     align-items: center;
-    background-color: #000000;
+    background-color: transparent;
     cursor: grab;
     margin: 50px auto;
     touch-action: none; /* Prevents scrolling on touch devices */
