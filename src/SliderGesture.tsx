@@ -23,19 +23,66 @@ const SliderGesture: React.FC = () => {
     const [mqttClient, setMqttClient] = useState<mqtt.MqttClient | null>(null);
     const [lastMessage, setLastMessage] = useState("");
     const [isDragging, setIsDragging] = useState(false);
+    const isDraggingRef = useRef(false);
     const [containerWidth, setContainerWidth] = useState(0);
+    const [dotPositions, setDotPositions] = useState<number[]>([]);
 
     const constraintsRef = useRef<HTMLDivElement>(null);
     const dragStartPoint = useRef({ x: 0, y: 0 });
-    
+
+    const headX = useMotionValue(0);
+    const tailX = useMotionValue(0);
     const x = useMotionValue(0);
     const width = useMotionValue(30);
 
+    const animationFrameId = useRef<number | null>(null);
+
+    useEffect(() => {
+        isDraggingRef.current = isDragging;
+    }, [isDragging]);
+
+    // This effect will keep the visual slider element (defined by x and width)
+    // in sync with the logical head and tail positions.
+    useEffect(() => {
+        const updateSliderProperties = () => {
+            const h = headX.get();
+            const t = tailX.get();
+            const newX = Math.min(h, t) - 15; // Center the slider element
+            const newWidth = Math.abs(h - t) + 30;
+            x.set(newX);
+            width.set(newWidth);
+        };
+        
+        const unsubscribeHead = headX.onChange(updateSliderProperties);
+        const unsubscribeTail = tailX.onChange(updateSliderProperties);
+
+        return () => {
+            unsubscribeHead();
+            unsubscribeTail();
+        };
+    }, [headX, tailX, x, width]);
+
     useEffect(() => {
         if (constraintsRef.current) {
-            setContainerWidth(constraintsRef.current.offsetWidth);
+            const rect = constraintsRef.current.getBoundingClientRect();
+            const containerWidth = rect.width;
+            setContainerWidth(containerWidth);
+            const sliderWidth = 30; // The resting width of the slider head
+
+            // Calculate positions so the center of the slider aligns with the dots
+            const trackWidth = containerWidth - sliderWidth;
+            const newDotPositions = Array.from({ length: 7 }).map((_, i) => 
+                (trackWidth / 6) * i + (sliderWidth / 2)
+            );
+            setDotPositions(newDotPositions);
+
+            // Set initial position
+            if (newDotPositions.length > 0) {
+                const initialX = newDotPositions[Math.floor(newDotPositions.length / 2)];
+                headX.set(initialX);
+                tailX.set(initialX);
+            }
         }
-        // Optional: Add resize listener if needed for responsive layouts
     }, []);
 
     // --- MQTT Connection ---
@@ -111,8 +158,68 @@ const SliderGesture: React.FC = () => {
         const colorIndex = Math.floor((position / trackWidth) * colorNames.length);
         return colorNames[Math.max(0, Math.min(colorIndex, colorNames.length - 1))];
     };
+    
+    const stopTailAnimation = useCallback(() => {
+        if (animationFrameId.current) {
+            cancelAnimationFrame(animationFrameId.current);
+            animationFrameId.current = null;
+        }
+    }, []);
+
+    const runTailAnimation = useCallback(() => {
+        stopTailAnimation(); // Ensure no multiple loops are running
+
+        const PIXELS_PER_CM = 37.8;
+        const SPEED_CM_PER_S = 1; // Tail speed
+        const speedPxPerS = PIXELS_PER_CM * SPEED_CM_PER_S;
+        let lastTime: number | null = null;
+
+        const frame = (time: number) => {
+            if (!isDraggingRef.current) {
+                stopTailAnimation();
+                return;
+            }
+            if (lastTime === null) {
+                lastTime = time;
+                animationFrameId.current = requestAnimationFrame(frame);
+                return;
+            }
+
+            const deltaTime = (time - lastTime) / 1000; // in seconds
+            lastTime = time;
+
+            const hx = headX.get();
+            const tx = tailX.get();
+            const distance = hx - tx;
+
+            if (Math.abs(distance) < 1) { // Threshold to stop jittering
+                animationFrameId.current = requestAnimationFrame(frame);
+                return;
+            }
+
+            const moveAmount = speedPxPerS * deltaTime;
+            const direction = Math.sign(distance);
+            
+            let newTailX;
+            if (direction > 0) {
+                newTailX = Math.min(hx, tx + moveAmount);
+            } else {
+                newTailX = Math.max(hx, tx - moveAmount);
+            }
+
+            tailX.set(newTailX);
+
+            animationFrameId.current = requestAnimationFrame(frame);
+        };
+
+        animationFrameId.current = requestAnimationFrame(frame);
+
+    }, [headX, tailX, stopTailAnimation]);
+
 
     const handlePanStart = (event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+        headX.stop();
+        tailX.stop();
         x.stop();
         width.stop();
 
@@ -124,8 +231,9 @@ const SliderGesture: React.FC = () => {
         const startY = info.point.y - containerRect.top;
         dragStartPoint.current = { x: startX, y: startY };
         
-        x.set(startX);
-        width.set(30);
+        // Snap head to cursor, tail stays put initially
+        headX.set(startX);
+        runTailAnimation();
     };
     
     const handlePan = (event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
@@ -133,70 +241,29 @@ const SliderGesture: React.FC = () => {
         if (!containerRect || !containerWidth) return;
 
         const currentX = info.point.x - containerRect.left;
-        const offsetX = currentX - dragStartPoint.current.x;
 
-        let newX = x.get();
-        let newWidth = width.get();
-
-        if (offsetX > 0) { // dragging right
-            newX = dragStartPoint.current.x;
-            newWidth = 30 + offsetX;
-        } else { // dragging left
-            newX = currentX;
-            newWidth = 30 + Math.abs(offsetX);
-        }
-
-        // Apply constraints
-        if (newX < 0) {
-            newWidth += newX; // Reduce width by the amount newX is negative
-            newX = 0;
-        }
-        if (newX + newWidth > containerWidth) {
-            newWidth = containerWidth - newX;
-        }
-        if (newWidth < 30) {
-            newWidth = 30; // Don't allow shrinking past resting state
-        }
-
-        x.set(newX);
-        width.set(newWidth);
+        // Head follows the cursor
+        headX.set(currentX);
     };
 
     const handlePanEnd = (event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
         setIsDragging(false);
+        stopTailAnimation();
         const containerRect = constraintsRef.current?.getBoundingClientRect();
         if (!containerRect || !containerWidth) return;
 
-        // --- Animation Logic ---
-        const PIXELS_PER_CM = 37.8;
-        const SPEED_CM_PER_S = 1;
-        const speedPxPerS = PIXELS_PER_CM * SPEED_CM_PER_S;
+        const releaseX = headX.get();
+
+        // Find the closest dot to snap to
+        const closestDotX = dotPositions.reduce((prev, curr) => {
+            return (Math.abs(curr - releaseX) < Math.abs(prev - releaseX) ? curr : prev);
+        });
+
+        // Animate both head and tail to the closest dot.
+        const anim_options = { type: "tween" as const, ease: "linear", duration: 5 };
         
-        const distanceToTravel = width.get() - 30;
-        
-        if (distanceToTravel < 5) { 
-             width.set(30);
-             const rawReleaseX = info.point.x - containerRect.left;
-             const releaseX = Math.max(15, Math.min(rawReleaseX, containerWidth - 15));
-             x.set(releaseX - 15);
-             return; 
-        }
-
-        const duration = distanceToTravel / speedPxPerS; 
-        const anim_options = { type: "tween", ease: "easeInOut", duration };
-
-        animate(width, 30, anim_options);
-
-        const rawReleaseX = info.point.x - containerRect.left;
-        const releaseX = Math.max(15, Math.min(rawReleaseX, containerWidth - 15));
-
-        if (info.offset.x > 0) { // Dragged right
-            const finalX = releaseX + 10;
-            animate(x, finalX, anim_options);
-        } else { // Dragged left
-            const finalX = releaseX - 10;
-            animate(x, finalX, anim_options);
-        }
+        animate(headX, closestDotX, anim_options);
+        animate(tailX, closestDotX, anim_options);
         
         // --- MQTT Logic ---
         const dx = info.offset.x;
@@ -224,11 +291,12 @@ const SliderGesture: React.FC = () => {
             <motion.div 
                 className="slider-container" 
                 ref={constraintsRef}
-                onPanStart={handlePanStart}
-                onPan={handlePan}
-                onPanEnd={handlePanEnd}
-                whileTap={{ cursor: "grabbing" }}
             >
+                <div className="dots-container">
+                    {dotPositions.map((pos, i) => (
+                        <div key={i} className="dot" style={{ left: `${pos}px` }} />
+                    ))}
+                </div>
                 <motion.div
                     className="stretchy-slider"
                     style={{
@@ -240,6 +308,22 @@ const SliderGesture: React.FC = () => {
                         backgroundPositionX,
                         backgroundRepeat: 'no-repeat',
                     }}
+                />
+                <motion.div
+                    className="head-grab-area"
+                    style={{
+                        x: headX,
+                        translateX: '-50%', // center the grab area on headX
+                        position: 'absolute',
+                        top: '0',
+                        bottom: '0',
+                        width: 30, // same as resting state width
+                        cursor: 'grab',
+                    }}
+                    onPanStart={handlePanStart}
+                    onPan={handlePan}
+                    onPanEnd={handlePanEnd}
+                    whileTap={{ cursor: "grabbing" }}
                 />
             </motion.div>
             <div className="mqtt-status">

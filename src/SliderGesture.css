@@ -1,18 +1,35 @@
 .slider-container {
-    width: 80vw;
+    position: relative;
+    width: 80%;
     max-width: 1300px;
     height: 100px;
-    position: relative;
     display: flex;
     align-items: center;
     background-color: #000000;
     cursor: grab;
+    margin: 50px auto;
     touch-action: none; /* Prevents scrolling on touch devices */
+}
+
+.dots-container {
+    position: absolute;
+    width: 100%;
+    top: -20px;
+    height: 8px; /* For alignment */
+}
+
+.dot {
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    background-color: white;
+    border-radius: 50%;
+    transform: translateX(-50%); /* Center the dot on its x-position */
 }
 
 .stretchy-slider {
     position: absolute;
-    height: 40px; /* Or any height you prefer */
+    height: 30px; /* Or any height you prefer */
     top: 50%;
     border-radius: 20px;
 }
