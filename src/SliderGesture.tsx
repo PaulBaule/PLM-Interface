@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { motion, useMotionValue, useTransform, useSpring, type PanInfo } from 'framer-motion';
+import { motion, useMotionValue, useTransform, animate, type PanInfo } from 'framer-motion';
 import mqtt from 'mqtt';
 import './SliderGesture.css';
 
@@ -30,10 +30,6 @@ const SliderGesture: React.FC = () => {
     
     const x = useMotionValue(0);
     const width = useMotionValue(30);
-
-    const springConfig = { stiffness: 1000, damping: 200 };
-    const xSpring = useSpring(x, springConfig);
-    const widthSpring = useSpring(width, springConfig);
 
     useEffect(() => {
         if (constraintsRef.current) {
@@ -108,7 +104,7 @@ const SliderGesture: React.FC = () => {
         return `linear-gradient(to right, ${colorStops.join(', ')})`;
     };
 
-    const backgroundPositionX = useTransform(xSpring, value => -value);
+    const backgroundPositionX = useTransform(x, value => -value);
 
     const getColorNameAt = (position: number, trackWidth: number) => {
         if (trackWidth === 0) return "";
@@ -171,13 +167,37 @@ const SliderGesture: React.FC = () => {
         const containerRect = constraintsRef.current?.getBoundingClientRect();
         if (!containerRect || !containerWidth) return;
 
+        // --- Animation Logic ---
+        const PIXELS_PER_CM = 37.8;
+        const SPEED_CM_PER_S = 1;
+        const speedPxPerS = PIXELS_PER_CM * SPEED_CM_PER_S;
+        
+        const distanceToTravel = width.get() - 30;
+        
+        if (distanceToTravel < 5) { 
+             width.set(30);
+             const rawReleaseX = info.point.x - containerRect.left;
+             const releaseX = Math.max(15, Math.min(rawReleaseX, containerWidth - 15));
+             x.set(releaseX - 15);
+             return; 
+        }
+
+        const duration = distanceToTravel / speedPxPerS; 
+        const anim_options = { type: "tween", ease: "easeInOut", duration };
+
+        animate(width, 30, anim_options);
+
         const rawReleaseX = info.point.x - containerRect.left;
-        // Clamp the release point to where the slider's center can be
         const releaseX = Math.max(15, Math.min(rawReleaseX, containerWidth - 15));
 
-        width.set(30);
-        x.set(releaseX - 15);
+        if (info.offset.x > 0) { // Dragged right
+            const finalX = releaseX - 30;
+            animate(x, finalX, anim_options);
+        } else { // Dragged left
+            x.set(releaseX);
+        }
         
+        // --- MQTT Logic ---
         const dx = info.offset.x;
         const dy = info.offset.y;
         
@@ -211,12 +231,12 @@ const SliderGesture: React.FC = () => {
                 <motion.div
                     className="stretchy-slider"
                     style={{
-                        x: xSpring,
-                        width: widthSpring,
+                        x,
+                        width,
                         y: '-50%',
                         background: getGradient(),
                         backgroundSize: `${containerWidth}px 100%`,
-                        backgroundPositionX: backgroundPositionX,
+                        backgroundPositionX,
                         backgroundRepeat: 'no-repeat',
                     }}
                 />
