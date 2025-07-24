@@ -1,0 +1,30 @@
+.slider-container {
+    width: 80vw;
+    max-width: 1300px;
+    height: 100px;
+    position: relative;
+    display: flex;
+    align-items: center;
+    background-color: #000000;
+    cursor: grab;
+    touch-action: none; /* Prevents scrolling on touch devices */
+}
+
+.stretchy-slider {
+    position: absolute;
+    height: 40px; /* Or any height you prefer */
+    top: 50%;
+    border-radius: 20px;
+}
+
+.mqtt-status {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    font-family: 'Arial', Courier, monospace;
+    color: #585858;
+    background-color: rgba(255, 255, 255, 0.1);
+    padding: 5px 10px;
+    border-radius: 5px;
+    font-size: 0.8rem;
+} 
