@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { motion, useMotionValue, useTransform, animate, type PanInfo } from 'framer-motion';
+import { motion, useMotionValue, useTransform, animate, type PanInfo, type AnimationOptions } from 'framer-motion';
 import mqtt from 'mqtt';
 import './SliderGesture.css';
 
@@ -196,12 +196,6 @@ const SliderGesture: React.FC = () => {
 
     const backgroundPositionX = useTransform(x, value => -value);
 
-    const getColorNameAt = (position: number, trackWidth: number) => {
-        if (trackWidth === 0) return "";
-        const colorIndex = Math.floor((position / trackWidth) * colorNames.length);
-        return colorNames[Math.max(0, Math.min(colorIndex, colorNames.length - 1))];
-    };
-    
     const stopTailAnimation = useCallback(() => {
         if (animationFrameId.current) {
             cancelAnimationFrame(animationFrameId.current);
@@ -271,7 +265,7 @@ const SliderGesture: React.FC = () => {
     }, [headX, tailX, stopTailAnimation]);
 
 
-    const handlePanStart = (event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+    const handlePanStart = (_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
         // Stop any leftover animations
         headX.stop();
         tailX.stop();
@@ -290,7 +284,7 @@ const SliderGesture: React.FC = () => {
         runTailAnimation();
     };
     
-    const handlePan = (event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+    const handlePan = (_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
         const containerRect = constraintsRef.current?.getBoundingClientRect();
         if (!containerRect || !containerWidth) return;
 
@@ -302,7 +296,7 @@ const SliderGesture: React.FC = () => {
         headX.set(constrainedX);
     };
 
-    const handlePanEnd = (event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+    const handlePanEnd = (_event: MouseEvent | TouchEvent | PointerEvent, _info: PanInfo) => {
         setIsDragging(false);
         stopTailAnimation();
         const containerRect = constraintsRef.current?.getBoundingClientRect();
@@ -325,11 +319,11 @@ const SliderGesture: React.FC = () => {
 
         // Head's duration is at least 3s, but waits for the tail if it's slower.
         const head_duration = Math.max(3, tail_duration);
-        const head_anim_options = { type: "tween" as const, ease: "easeInOut", duration: head_duration };
+        const head_anim_options: AnimationOptions = { type: "tween" as const, ease: "easeInOut", duration: head_duration };
         animate(headX, closestDotX, head_anim_options);
 
         // Animate tail to the final position at a constant speed
-        const tail_anim_options = { type: "tween" as const, ease: "linear", duration: tail_duration };
+        const tail_anim_options: AnimationOptions = { type: "tween" as const, ease: "linear", duration: tail_duration };
         animate(tailX, closestDotX, {
             ...tail_anim_options,
             onComplete: () => {
