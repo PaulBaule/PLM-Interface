@@ -9,7 +9,6 @@ const MQTT_TOPIC = "zotac/pico/control";
 const MQTT_FADE_TOPIC = "zotac/pico/fading";
 
 // --- Color Definitions ---
-const colorNames = ["rose", "pfirsich", "creme", "mint", "himmelblau", "lavendel", "flieder"];
 const keyColors = [
     [255, 191, 204], // rose
     [255, 217, 184], // pfirsich
@@ -320,7 +319,7 @@ const SliderGesture: React.FC = () => {
         // Head's duration is at least 3s, but waits for the tail if it's slower.
         const head_duration = Math.max(3, tail_duration);
         const head_anim_options: AnimationOptions = { type: "tween" as const, ease: "easeInOut", duration: head_duration };
-        animate(headX, closestDotX, head_anim_options);
+        animate(headX, closestDotX, head_anim_options as any);
 
         // Animate tail to the final position at a constant speed
         const tail_anim_options: AnimationOptions = { type: "tween" as const, ease: "linear", duration: tail_duration };
@@ -358,7 +357,7 @@ const SliderGesture: React.FC = () => {
                     }
                 }
             }
-        });
+        } as any);
     };
 
 
